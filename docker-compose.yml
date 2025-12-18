@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: escala_postgres
+    environment:
+      POSTGRES_DB: escala_db
+      POSTGRES_USER: escala_user
+      POSTGRES_PASSWORD: escala_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U escala_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: escala_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: escala_backend
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "True"
+      DATABASE_URL: postgresql://escala_user:escala_pass@postgres:5432/escala_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-unsafe
+      ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,backend
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://frontend:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+
+  celery:
+    build: ./backend
+    container_name: escala_celery
+    command: celery -A config worker --loglevel=info
+    environment:
+      DEBUG: "True"
+      DATABASE_URL: postgresql://escala_user:escala_pass@postgres:5432/escala_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-unsafe
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+
+  celery-beat:
+    build: ./backend
+    container_name: escala_celery_beat
+    command: celery -A config beat --loglevel=info
+    environment:
+      DEBUG: "True"
+      DATABASE_URL: postgresql://escala_user:escala_pass@postgres:5432/escala_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-unsafe
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+
+  frontend:
+    build: ./frontend
+    container_name: escala_frontend
+    command: npm run dev
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+    working_dir: /app
+
+volumes:
+  postgres_data:
+  redis_data:
