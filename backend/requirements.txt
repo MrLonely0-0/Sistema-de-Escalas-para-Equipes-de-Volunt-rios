@@ -16,3 +16,5 @@ pytest==7.4.4
 pytest-django==4.7.0
 pytest-asyncio==0.23.2
 uuid==1.30
+gunicorn==21.2.0
+whitenoise==6.6.0
