@@ -9,6 +9,7 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
+      python manage.py migrate --noinput
     startCommand: |
       gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /admin/login/
@@ -35,8 +36,6 @@ services:
           name: escala-redis
           type: redis
           property: connectionString
-    postDeployCommand: |
-      python manage.py migrate --noinput
 
   - type: worker
     name: escala-celery
